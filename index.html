@@ -169,6 +169,7 @@
           <select id="f-parceira">
             <option value="">Selecione…</option>
             <option value="Dínamo Engenharia">Dínamo Engenharia</option>
+            <option value="Equatorial Energia">Equatorial Energia</option>
           </select>
         </div>
         <div class="campo full"><label>Título</label>
@@ -863,7 +864,8 @@ document.getElementById('b2-next').onclick = ()=>{
   // logo da parceira no relatório (mapa parceira -> logo embutida)
   App.logoParceira = null;
   const logosParceira = {
-    'Dínamo Engenharia': 'logo-dinamo'
+    'Dínamo Engenharia': 'logo-dinamo',
+    'Equatorial Energia': 'logo-eq'
   };
   const elId = logosParceira[App.projeto.parceira];
   if(elId){
