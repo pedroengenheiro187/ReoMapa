@@ -1129,46 +1129,88 @@ async function gerarPDF(){
       doc.text(linhas, M, y); y += linhas.length*3 + 1.5;
     });
 
-    // ---- PÁGINAS DE FOTOS (2 por página) ----
-    const fotoW = PW - 2*M;
-    const fotoH = 118; // altura de cada foto
-    let contagem = {};
-    for(let i=0;i<fotosSel.length;i++){
-      const {foto, ponto} = fotosSel[i];
-      msg.textContent = 'Processando fotos…';
-      det.textContent = `Foto ${i+1} de ${fotosSel.length}`;
-      fill.style.width = Math.round((i/fotosSel.length)*90)+'%';
-      await new Promise(r=>setTimeout(r,0)); // deixa a UI respirar
+    // ---- PÁGINAS DE FOTOS (2 lado a lado, agrupadas por poste) ----
+    // agrupa as fotos selecionadas por ponto, preservando a ordem
+    const grupos = [];
+    App.pontos.forEach(p=>{
+      const fotosDoPonto = p.fotos.filter(f=>f.sel);
+      if(fotosDoPonto.length>0) grupos.push({ ponto:p, fotos:fotosDoPonto });
+    });
 
-      // numeração por ponto
-      contagem[ponto.id] = (contagem[ponto.id]||0)+1;
-      const legenda = `${ponto.nome}  (Foto ${contagem[ponto.id]})`;
+    const gap = 8;                       // espaço horizontal entre as duas fotos
+    const fotoW = (PW - 2*M - gap) / 2;  // largura de cada foto (metade da área útil)
+    const fotoH = 105;                   // altura de cada foto
+    const linhaH = fotoH + 18;           // altura da linha (foto + legenda)
 
-      const carimbada = await prepararFoto(foto.dataURL);
+    let totalFeitas = 0;
+    const totalFotos = fotosSel.length;
 
-      const posNaPagina = i % 2; // 0 = topo, 1 = baixo
-      if(posNaPagina===0){
-        doc.addPage();
-        desenharCabecalhoFoto(doc, logoEq, PW, M, p);
+    for(let g=0; g<grupos.length; g++){
+      const grupo = grupos[g];
+      let contagem = 0;
+
+      // percorre as fotos do ponto de 2 em 2
+      for(let i=0; i<grupo.fotos.length; i+=2){
+        const parFotos = [grupo.fotos[i], grupo.fotos[i+1]].filter(Boolean);
+        const ehImpar = parFotos.length===1;
+
+        // nova página: sempre no início de cada poste, e quando a linha atual não cabe
+        const primeiraDoPonto = (i===0);
+        if(primeiraDoPonto){
+          doc.addPage();
+          desenharCabecalhoFoto(doc, logoEq, PW, M, grupo.ponto);
+          var yLinha = 32;
+        } else {
+          yLinha += linhaH + 6;
+          // se estourar a página, cria nova e repõe o cabeçalho
+          if(yLinha + linhaH > 285){
+            doc.addPage();
+            desenharCabecalhoFoto(doc, logoEq, PW, M, grupo.ponto);
+            yLinha = 32;
+          }
+        }
+
+        // desenha 1 ou 2 fotos na linha
+        for(let k=0; k<parFotos.length; k++){
+          const foto = parFotos[k];
+          contagem++;
+          totalFeitas++;
+          msg.textContent = 'Processando fotos…';
+          det.textContent = `Foto ${totalFeitas} de ${totalFotos}`;
+          fill.style.width = Math.round((totalFeitas/totalFotos)*90)+'%';
+          await new Promise(r=>setTimeout(r,0));
+
+          const legenda = `${grupo.ponto.nome}  (Foto ${contagem})`;
+          const carimbada = await prepararFoto(foto.dataURL);
+
+          // posição X: se ímpar (foto sozinha), centraliza; senão, esquerda/direita
+          let xCaixa;
+          if(ehImpar){
+            xCaixa = M + (PW - 2*M - fotoW)/2; // centralizada
+          } else {
+            xCaixa = M + k*(fotoW + gap);      // k=0 esquerda, k=1 direita
+          }
+
+          // mantém proporção da imagem dentro da caixa (fotoW x fotoH)
+          const ip = doc.getImageProperties(carimbada);
+          const rImg = ip.width/ip.height;
+          const rBox = fotoW/fotoH;
+          let dw, dh;
+          if(rImg > rBox){ dw = fotoW; dh = fotoW/rImg; }
+          else { dh = fotoH; dw = fotoH*rImg; }
+          const xImg = xCaixa + (fotoW - dw)/2;
+          const yImg = yLinha + (fotoH - dh)/2;
+          doc.addImage(carimbada, 'JPEG', xImg, yImg, dw, dh);
+
+          // legenda embaixo da foto
+          doc.setFontSize(8); doc.setTextColor(40); doc.setFont(undefined,'bold');
+          const ly = yLinha + fotoH + 5;
+          doc.setDrawColor(225); doc.setFillColor(248,250,252);
+          doc.rect(xCaixa, ly-4, fotoW, 7, 'FD');
+          doc.text(legenda, xCaixa+3, ly);
+          doc.setFont(undefined,'normal');
+        }
       }
-      const yTopo = 32 + posNaPagina*(fotoH+18);
-      // dimensões reais para manter proporção dentro da caixa (fotoW x fotoH)
-      const ip = doc.getImageProperties(carimbada);
-      const rImg = ip.width/ip.height;
-      const rBox = fotoW/fotoH;
-      let dw, dh;
-      if(rImg > rBox){ dw = fotoW; dh = fotoW/rImg; }
-      else { dh = fotoH; dw = fotoH*rImg; }
-      const xImg = M + (fotoW - dw)/2;
-      const yImg = yTopo + (fotoH - dh)/2;
-      doc.addImage(carimbada, 'JPEG', xImg, yImg, dw, dh);
-      // legenda
-      doc.setFontSize(8); doc.setTextColor(40); doc.setFont(undefined,'bold');
-      const ly = yTopo + fotoH + 5;
-      doc.setDrawColor(225); doc.setFillColor(248,250,252);
-      doc.rect(M, ly-4, fotoW, 7, 'FD');
-      doc.text(legenda, M+3, ly);
-      doc.setFont(undefined,'normal');
     }
 
     // ---- PÁGINA FINAL: CONSIDERAÇÕES ----
