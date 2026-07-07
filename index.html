@@ -1180,7 +1180,8 @@ async function gerarPDF(){
           fill.style.width = Math.round((totalFeitas/totalFotos)*90)+'%';
           await new Promise(r=>setTimeout(r,0));
 
-          const legenda = `${grupo.ponto.nome}  (Foto ${contagem})`;
+          const nomePoste = `${grupo.ponto.nome}  (Foto ${contagem})`;
+          const descPonto = (grupo.ponto.descricao || '').trim();
           const carimbada = await prepararFoto(foto.dataURL);
 
           // posição X: se ímpar (foto sozinha), centraliza; senão, esquerda/direita
@@ -1202,12 +1203,23 @@ async function gerarPDF(){
           const yImg = yLinha + (fotoH - dh)/2;
           doc.addImage(carimbada, 'JPEG', xImg, yImg, dw, dh);
 
-          // legenda embaixo da foto
-          doc.setFontSize(8); doc.setTextColor(40); doc.setFont(undefined,'bold');
-          const ly = yLinha + fotoH + 5;
+          // ---- LEGENDA embaixo da foto: nome do poste + descrição ----
+          const ly = yLinha + fotoH + 4;
+          // quebrar a descrição em linhas que caibam na largura da caixa
+          doc.setFontSize(7);
+          const descLinhas = descPonto ? doc.splitTextToSize(descPonto, fotoW - 6) : [];
+          // altura da caixa: 1 linha do nome + linhas da descrição + respiros
+          const alturaCaixa = 6 + (descLinhas.length * 3.2) + (descLinhas.length>0 ? 1.5 : 0);
           doc.setDrawColor(225); doc.setFillColor(248,250,252);
-          doc.rect(xCaixa, ly-4, fotoW, 7, 'FD');
-          doc.text(legenda, xCaixa+3, ly);
+          doc.rect(xCaixa, ly, fotoW, alturaCaixa, 'FD');
+          // nome do poste (negrito)
+          doc.setFontSize(8); doc.setTextColor(40); doc.setFont(undefined,'bold');
+          doc.text(nomePoste, xCaixa+3, ly+4.5);
+          // descrição (normal, menor, cinza)
+          if(descLinhas.length>0){
+            doc.setFontSize(7); doc.setTextColor(90); doc.setFont(undefined,'normal');
+            doc.text(descLinhas, xCaixa+3, ly+8);
+          }
           doc.setFont(undefined,'normal');
         }
       }
